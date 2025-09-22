@@ -1,0 +1,5 @@
+---@class Options
+---@field enabled boolean
+---@field macro_identifier string | string[]
+---@field indent_size integer
+---@field autoformat_on_save boolean

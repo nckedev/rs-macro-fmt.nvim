@@ -15,6 +15,8 @@ end
 -- returns a positive integer (the difference) if there are more opening brackets than closing
 -- returns a negative integer (the difference) if there are more closing than opening
 -- returns 0 if they are balanced
+---@param line string
+---@return integer
 local function line_bracket_balance(line)
   -- TODO: dont count brackets inside a string
   local balance = 0
@@ -30,14 +32,6 @@ local function line_bracket_balance(line)
     end
   end
   return balance
-end
-
-local function ends_with_open_bracket(line)
-  return string.sub(line, -1) == '{'
-end
-
-local function is_close_bracket(line)
-  return string.sub(line, 1, 1) == '}' or string.sub(line, 1, 2) == "};"
 end
 
 local function fmt(bufnr, opts)
@@ -95,8 +89,9 @@ local function fmt(bufnr, opts)
   end
 end
 
+--- @type Options
 local defaults = {
-  enabled = true,
+  enabled = false,
   macro_identifier = "html",
   indent_size = 4,
   autoformat_on_save = true,
@@ -105,8 +100,10 @@ local defaults = {
 
 local M = {}
 
+---@param opts Options
 function M.setup(opts)
   -- overwrite the defaults with opts if they are set
+  --- @type Options
   opts = vim.tbl_extend("force", defaults, opts or {})
 
   if not opts.enabled then return end
