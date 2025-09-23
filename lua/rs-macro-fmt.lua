@@ -1,3 +1,9 @@
+---@enum bracket
+local BRACKET = {
+  open = '{',
+  close = '}'
+}
+
 local function count_leading_ws(line)
   local count = 0
   for i = 1, #line do
@@ -11,42 +17,60 @@ local function count_leading_ws(line)
   return count
 end
 
--- checks the balance of brackets for given line
--- returns a positive integer (the difference) if there are more opening brackets than closing
--- returns a negative integer (the difference) if there are more closing than opening
--- returns 0 if they are balanced
----@param line string
----@return integer
-local function line_bracket_balance(line)
+-- Calculates what level of indent the current line should have
+-- returns current, next
+--- @param line string the line to calculate without leading whitespace
+--- @return integer,  integer
+local function calculate_indent_level(line)
   -- TODO: dont count brackets inside a string
   local balance = 0
   local in_str = false
+  local first = string.sub(line, 1, 1) or ''
+  local last = string.sub(line, #line, #line) or ''
+
+  assert(first ~= " ", "string cant have any leading whitespace")
+
   for i = 1, #line do
     local c = string.sub(line, i, i)
-    if c == "{" and not in_str then
+    if c == BRACKET.open and not in_str then
       balance = balance + 1
-    elseif c == "}" and not in_str then
+    elseif c == BRACKET.close and not in_str then
       balance = balance - 1
     elseif c == "\"" then
       in_str = not in_str
     end
   end
-  return balance
+
+  -- } {
+  if balance == 0 and first == BRACKET.close and last == BRACKET.open then
+    return -1, 1
+    -- {}
+  elseif balance == 0 then -- and first == BRACKET.open and last == BRACKET.close then
+    return 0, 0
+    -- {
+  elseif balance > 0 then
+    return 0, 1
+    -- }
+  elseif balance < 0 then
+    return -1, 0
+  else
+    return 0, 0
+  end
 end
 
 local function fmt(bufnr, opts)
   if vim.bo.filetype ~= "rust" then
-    vim.notify("only rust files are supported", vim.log.levels.WARN)
+    vim.notify("only rust files are supported", vim.log.levels.ERROR)
     return
   end
   local language_tree = vim.treesitter.get_parser(bufnr, "rust")
   if language_tree == nil then
-    vim.notify("No treesitter parser for rust found")
+    vim.notify("No treesitter parser for rust found", vim.log.levels.ERROR)
     return
   end
   local syntax_tree = language_tree:parse()
   if syntax_tree == nil then
-    print("no tree")
+    vim.notify("no tree", vim.log.levels.ERROR)
     return
   end
   local root = syntax_tree[1]:root()
@@ -70,19 +94,16 @@ local function fmt(bufnr, opts)
         local no_indent_line = string.sub(line, count_leading_ws(line) + 1)
 
         -- if the line have more closing than opening brackets -> decrese the indent level
-        -- TODO: balance the line and move each new closing to a new line
-        if (line_bracket_balance(no_indent_line) < 0) then
-          current_indent = current_indent - opts.indent_size
-        end
+        local current, next = calculate_indent_level(no_indent_line)
+        current_indent = current_indent + (current * opts.indent_size)
 
         -- write the line to the buffer
         vim.api.nvim_buf_set_lines(bufnr, row, row + 1, false,
           { string.rep(" ", current_indent) .. no_indent_line })
 
-        -- if the line has more opening than closing brackets -> increase the indent level
-        if (line_bracket_balance(line) > 0) then
-          current_indent = current_indent + opts.indent_size
-        end
+        -- set the indent level for the next line
+        current_indent = current_indent + (next * opts.indent_size)
+
         row = row + 1
       end
     end
@@ -120,5 +141,7 @@ function M.setup(opts)
     })
   end
 end
+
+M._private = { count_leading_ws = count_leading_ws }
 
 return M
